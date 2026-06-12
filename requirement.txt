@@ -1,0 +1,9 @@
+requests
+boto3
+python-dotenv
+pyspark
+pandas
+sqlalchemy
+mysql-connector-python
+apache-airflow
+pytest
