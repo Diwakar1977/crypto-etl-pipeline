@@ -1,9 +1,9 @@
-🚀 Crypto ETL Pipeline
-📖 Project Overview
+# 🚀 Crypto ETL Pipeline
+# 📖 Project Overview
 
 The Crypto ETL Pipeline is an end-to-end Data Engineering project that extracts real-time cryptocurrency market data from the CoinGecko API, transforms the data using Python, and loads it into Amazon Redshift for analytics. The pipeline is orchestrated using Apache Airflow and deployed on AWS with an automated CI/CD pipeline using GitHub Actions.
 
-🎯 Objectives
+# 🎯 Objectives
 Extract cryptocurrency market data from CoinGecko API
 Clean and transform raw data
 Load processed data into Amazon Redshift
@@ -11,7 +11,7 @@ Automate ETL workflow using Apache Airflow
 Implement CI/CD using GitHub Actions
 Deploy the project on AWS EC2
 
-🏗️ Project Architecture
+# 🏗️ Project Architecture
 CoinGecko API
       │
       ▼
@@ -32,12 +32,12 @@ Apache Airflow
       │
 GitHub Actions (CI/CD)
 
-🛠️ Tech Stack
+# 🛠️ Tech Stack
 Python
 Apache Airflow
 Amazon EC2
 Amazon Redshift
-Amazon S3 (Optional)
+Amazon S3 
 Git
 GitHub
 GitHub Actions
@@ -46,17 +46,15 @@ Pandas
 Requests
 Boto3
 
-📂 Project Structure
+# 📂 Project Structure
 crypto-etl-pipeline/
 │
 ├── .github/
 ├── src/
 ├── config/
 ├── tests/
-├── sql/
 ├── docs/
 ├── requirements.txt
-├── Dockerfile
 ├── README.md
 └── setup.py
 
