@@ -6,3 +6,8 @@ psycopg2-binary
 sqlalchemy
 apache-airflow
 pyarrow
+python-dotenv
+snowflake-connector-python
+pyyaml
+pytest
+
