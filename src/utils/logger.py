@@ -22,3 +22,8 @@ def get_logger(name):
 
     return logger
 
+def log_banner(logger, message: str):
+    logger.info("=" * 80)
+    logger.info(message)
+    logger.info("=" * 80)
+

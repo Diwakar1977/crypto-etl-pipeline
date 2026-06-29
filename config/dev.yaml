@@ -1,9 +1,0 @@
-api:
-  url:
-
-s3:
-  bucket:
-
-local:
-  raw_path:
-  processed_path:
