@@ -36,7 +36,7 @@ class S3RawLoader:
 
             self.s3.put_object(
                 Bucket=self.bucket,
-                key=s3_key,
+                Key=s3_key,
                 Body=json.dumps(data),
                 ContentType="application/json"
             )

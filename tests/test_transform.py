@@ -1,12 +1,12 @@
-from src.utils.spark_session import get_spark
+from src.utils.spark_session import crypto_spark_session
 
 from src.extract.coingecko_extractor import CoinGeckoExtractor
 from src.transform.normalizer import normalize
 from src.schemas.schema_manager import SchemaManager
-from src.transform.data_cleaner import DataCleaner
+from src.transform.crypto_transformer import CryptoTransformer
 from src.transform.validator import DataValidator
 
-spark = get_spark("Crypto ETL Test")
+spark = crypto_spark_session("Crypto ETL Test")
 
 # Extract
 extractor = CoinGeckoExtractor()
@@ -35,7 +35,7 @@ df.printSchema()
 print("\nOriginal Data")
 df.show(5, truncate=False)
 
-clean_df = DataCleaner.clean(df)
+clean_df = CryptoTransformer.clean(df)
 
 print("\nCleaned Data")
 clean_df.show(5, truncate=False)

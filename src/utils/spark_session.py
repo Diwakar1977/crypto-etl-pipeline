@@ -1,18 +1,15 @@
 import os
 import sys
 from pyspark.sql import SparkSession
-from src.utils.logger import get_logger,log_banner
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 os.environ["PYSPARK_PYTHON"] = sys.executable
 os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
 
-def get_spark(app_name: str = "Crypto ETL"):
+def crypto_spark_session(app_name: str = "Crypto ETL"):
     """Create and sparkssion."""
-
-    log_banner(logger,"SPARK SESSION")
-    logger.info("Creating Spark Session...")
     
     spark = (
         SparkSession.builder
@@ -24,6 +21,5 @@ def get_spark(app_name: str = "Crypto ETL"):
         .getOrCreate()
     )
 
-    logger.info("Spark Session created successfully.")
-
     return spark
+

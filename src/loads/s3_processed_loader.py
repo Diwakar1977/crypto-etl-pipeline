@@ -27,6 +27,7 @@ class S3ProcessedLoader:
                 f"year={now:%Y}/"
                 f"month={now:%m}/"
                 f"day={now:%d}/"
+                f"run_time={now:%H%M%S}/"
             )
 
             log_banner(logger, "PROCESSED S3 RAW TO PARQUET")

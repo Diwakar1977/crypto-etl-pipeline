@@ -2,7 +2,7 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-def normalize(data):
+def normalize(spark,data):
     try:
         logger.info("Starting data normalization.")
         
@@ -32,10 +32,13 @@ def normalize(data):
                     new_row[k] = v
             
             cleaned.append(new_row)
+        
+        df = spark.createDataFrame(cleaned)
+
 
         logger.info(f"Normalization completed. processed {len(cleaned)} records.")
         
-        return cleaned
+        return df
     
     except Exception as e:
         logger.exception(f"Normaliztion failed: {e}")

@@ -1,6 +1,8 @@
 from pyspark.sql import DataFrame
+from pyspark.sql.types import StructType
 from pyspark.sql.functions import col
 from src.utils.logger import get_logger
+
 
 logger = get_logger(__name__)
 
@@ -12,6 +14,18 @@ class DataValidator:
     ID_COLUMN = "id"
     PRICE_COLUMN = "current_price"
     MRKET_CAP_COLUMN = "market_cap"
+
+    @staticmethod
+    def validate_schema(df: DataFrame, expected_schema: StructType):
+        """Validate DataFrame schema."""
+        logger.info("Validating schema...")
+
+        if df.schema != expected_schema:
+            logger.error("Schema validation failed.")
+            raise ValueError("DataFrame schema does not match expected schema.")
+
+        logger.info("Schema validation passed.")
+
 
     @staticmethod
     def validate_null_ids(df:DataFrame):
@@ -84,7 +98,7 @@ class DataValidator:
         logger.info("Market cap validation passed.")
 
     @classmethod
-    def validate(cls, df:DataFrame):
+    def validate(cls, df:DataFrame,expected_schema: StructType):
         """Execute all validations."""
 
         logger.info("=" * 80)
@@ -92,6 +106,7 @@ class DataValidator:
         logger.info("=" * 80)
 
         try:
+            cls.validate_schema(df, expected_schema)
             cls.validate_null_ids(df)
             cls.valid_duplicate_ids(df)
             cls.validate_negative_prices(df)
