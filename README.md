@@ -1,2 +1,0 @@
-# crypto-etl-pipeline
-
