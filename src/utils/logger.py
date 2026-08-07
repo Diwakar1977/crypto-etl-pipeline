@@ -1,64 +1,58 @@
 import logging
 import os
+import sys
 
 class Logger:
     """Application logger utility."""
 
     LOG_DIR = "logs"
 
-    # Create logs directory
     os.makedirs(LOG_DIR, exist_ok=True)
 
     @staticmethod
     def get_logger(name: str, log_file: str):
         """
         Create and return logger instance.
-
-        Args:
-            name: Logger name
-            log_file: Log file name
-
-        Returns:
-            logging.Logger
         """
 
         logger = logging.getLogger(name)
 
-        if not logger.handlers:
-            logger.setLevel(logging.INFO)
-            logger.propagate = False
+        if logger.handlers:
+            return logger
 
-            formatter = logging.Formatter(
-                "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
-            )
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
 
-            file_path = os.path.join(
-                Logger.LOG_DIR,
-                log_file
-            )
+        formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+        )
 
-            # File handler
-            file_handler = logging.FileHandler(
-                file_path,
-                encoding="utf-8"
-            )
-            file_handler.setFormatter(formatter)
+        # File handler
+        file_path = os.path.join(
+            Logger.LOG_DIR,
+            log_file
+        )
 
-            # Console handler
-            console_handler = logging.StreamHandler()
+        file_handler = logging.FileHandler(
+            file_path,
+            encoding="utf-8"
+        )
+        file_handler.setFormatter(formatter)
+
+        logger.addHandler(file_handler)
+
+        # Console handler
+        # Only add when a valid stderr stream is available.
+        if sys.stderr is not None:
+            console_handler = logging.StreamHandler(sys.stderr)
             console_handler.setFormatter(formatter)
-
-            logger.addHandler(file_handler)
             logger.addHandler(console_handler)
 
         return logger
 
-
     @staticmethod
     def log_banner(logger, message: str):
-        """
-        Print formatted banner message.
-        """
+        """Print formatted banner message."""
 
         logger.info("=" * 60)
         logger.info(message)
