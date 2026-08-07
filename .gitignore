@@ -1,0 +1,28 @@
+# Virtual Environment
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment
+.env
+
+# Logs
+logs/
+*.log
+
+# Pytest
+.pytest_cache/
+
+# Spark
+spark-warehouse/
+
+# VS Code
+.vscode/
+
+# Test fixtures / sample data
+tests/fixtures/
+
+
+
