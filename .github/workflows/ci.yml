@@ -14,85 +14,87 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-24.04
 
-  steps:
-    # Checkout source code
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+    steps:
 
-    # Setup Python 3.12
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with: 
-        python-version: "3.12"
-        cache: "pip"
+      # Checkout source code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    # Setup Java 17 for Pyspark
-    - name: Set Up Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: "temurin"
-        java-version: "17"
-    
-    # Verify Python
-    - name: Verify Python Version
-      run: |
-        python --version
-        python -m pip --version
-    
-    # Verify Java
-    - name: Verify Java Version
-      run: | 
-        java -version
+      # Setup Python 3.12
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
 
-    # Upgrade pip
-    - name: Upgrade
-      run: | 
-        python -m pip install --upgrade pip
+      # Setup Java 17 for PySpark
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
 
-    # Install Project Dependencies
-    - name: Verify Dependencies
-      run: | 
-        python -m pip install -r requirements.txt
-    
-    # Verify impotnt Dependencies
-    - name: Verify Dependencies
-      run: | 
-        python -c "import pytest; print('pytest:', pytest.__version__)"
-        python -c "import pyspark; print('Pyspark:', pyspark.__version__)"
+      # Verify Python
+      - name: Verify Python Version
+        run: |
+          python --version
+          python -m pip --version
 
-    # Check Project Structure
-    - name: Check Project Structure
-      run: |
-        echo "Project root:"
-        pwd
+      # Verify Java
+      - name: Verify Java Version
+        run: |
+          java -version
 
-        echo ""
-        echo "Top-level files and directories:"
-        ls -la
+      # Upgrade pip
+      - name: Upgrade pip
+        run: |
+          python -m pip install --upgrade pip
 
-        echo ""
-        echo "Project files:"
-        find . -maxdepth 3 -type f \
-          ! -path "./.git/*" \
-          ! -path "./venv/*" \
-          ! -path "./__pycache__/*" \
-          | sort
+      # Install Project Dependencies
+      - name: Install Project Dependencies
+        run: |
+          python -m pip install -r requirements.txt
 
-    # Run Unit tests
-    - name: Run Unit Tests
-      run: |
-       pytest tests/unit -v
+      # Verify Important Dependencies
+      - name: Verify Important Dependencies
+        run: |
+          python -c "import pytest; print('pytest:', pytest.__version__)"
+          python -c "import pyspark; print('PySpark:', pyspark.__version__)"
 
-    # Run Complete test suite with coverge
-    - name: Run All Tests With Coverage
-      run: | 
-        pytest --cov=src --cov-report=term-missing --cov-report=xml
-    
-    # Upload Coverage Report
-    - name: Upload Coverage Report
-      uses: actions/upload-artifact@v4
-      with: 
-        name: coverage-report
-        path: coverage.xml
+      # Check Project Structure
+      - name: Check Project Structure
+        run: |
+          echo "Project root:"
+          pwd
 
-  
+          echo ""
+          echo "Top-level files and directories:"
+          ls -la
+
+          echo ""
+          echo "Project files:"
+          find . -maxdepth 3 -type f \
+            ! -path "./.git/*" \
+            ! -path "./venv/*" \
+            ! -path "./__pycache__/*" \
+            | sort
+
+      # Run Unit Tests
+      - name: Run Unit Tests
+        run: |
+          pytest tests/unit -v
+
+      # Run Unit Tests With Coverage
+      - name: Run Unit Tests With Coverage
+        run: |
+          pytest tests/unit \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-report=xml
+
+      # Upload Coverage Report
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
