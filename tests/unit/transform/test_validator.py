@@ -5,7 +5,7 @@ from src.transform.validator import DataValidator
 SCHEMA_FILE = "tests/fixtures/crypto_schema.json"
 DATA_FILE = "tests/fixtures/sample_crypto.ndjson"
 
-def test_data_validation_integration():
+def test_data_validation():
 
     spark = SparkSessionManager.get_session()
 

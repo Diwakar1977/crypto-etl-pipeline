@@ -21,8 +21,11 @@ spark-warehouse/
 # VS Code
 .vscode/
 
-# Test fixtures / sample data
-tests/fixtures/
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
 
-
-
+# Local temporary data
+temp/
+data/test_output/

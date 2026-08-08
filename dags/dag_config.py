@@ -23,12 +23,11 @@ TAGS = [
     "production",
 ]
 
-
 # Scheduling
 # Every day at 09:00 UTC
 SCHEDULE = "0 9 * * *"
 
-START_DATE = datetime(2026, 8, 7)
+START_DATE = datetime(2026, 8, 9)
 
 CATCHUP = False
 

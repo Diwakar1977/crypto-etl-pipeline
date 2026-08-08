@@ -5,7 +5,7 @@ from src.utils.spark_session import SparkSessionManager
 SCHEMA_FILE = "tests/fixtures/crypto_schema.json"
 DATA_FILE = "tests/fixtures/sample_crypto.ndjson"
 
-def test_normalizer_integration():
+def test_normalizer():
     spark = SparkSessionManager.get_session()
 
     try:
