@@ -1,9 +1,14 @@
 from pyspark.sql import SparkSession
+import logging
 
 from config.config import Config
 from src.utils.logger import Logger
 
 logger = Logger.get_logger("spark_session", "spark_session.log")
+
+py4j_logger = logging.getLogger("py4j")
+py4j_logger.setLevel(logging.WARNING)
+py4j_logger.propagate = False
 
 class SparkSessionManager:
     """Creates and manages a reusable SparkSession."""
@@ -106,15 +111,20 @@ class SparkSessionManager:
     def stop_session(cls):
         """Stop the SparkSession."""
 
+        spark = cls._spark
+
+        if spark is None:
+            return
+
+        # Clear reference first
+        cls._spark = None
+
         try:
-            if cls._spark is not None:
+            logger.info("Stopping Spark Session.")
 
-                logger.info("Stopping Spark Session.")
+            spark.stop()
 
-                cls._spark.stop()
-                cls._spark = None
-
-                logger.info("Spark Session stopped successfully.")
+            logger.info("Spark Session stopped successfully.")
 
         except Exception:
             logger.exception("Failed to stop Spark Session.")

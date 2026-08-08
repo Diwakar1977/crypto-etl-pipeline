@@ -11,9 +11,7 @@ class Logger:
 
     @staticmethod
     def get_logger(name: str, log_file: str):
-        """
-        Create and return logger instance.
-        """
+        """Create and return logger instance."""
 
         logger = logging.getLogger(name)
 
@@ -37,12 +35,11 @@ class Logger:
             file_path,
             encoding="utf-8"
         )
-        file_handler.setFormatter(formatter)
 
+        file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 
         # Console handler
-        # Only add when a valid stderr stream is available.
         if sys.stderr is not None:
             console_handler = logging.StreamHandler(sys.stderr)
             console_handler.setFormatter(formatter)
