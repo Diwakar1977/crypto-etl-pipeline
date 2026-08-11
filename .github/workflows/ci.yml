@@ -125,6 +125,8 @@ jobs:
 
     env:
       AIRFLOW_HOME: ${{ github.workspace }}/airflow
+      AIRFLOW_CORE_DAGS_FOLDER: ${{ github.workspace }}/dags
+      PATHONPATH: ${{ github.workspace }}
       AWS_REGION: ap-south-1
       AWS_DEFAULT_REGION: ap-south-1
 
@@ -166,6 +168,11 @@ jobs:
       - name: Verify Airflow Version
         run: |
           airflow version
+
+      # Initialize Airflow Database 
+      - name: Initialize Airflow Database 
+        run: | 
+          airflow db migrate
 
       # Validate DAG Files
       - name: Validate DAG Imports
