@@ -310,9 +310,9 @@ jobs:
           import os
           import importlib
 
-          print("========================================")
+          print("=" * 60)
           print("       SPARK MODULE VALIDATION")
-          print("========================================")
+          print("=" * 60 )
 
           modules = []
 
