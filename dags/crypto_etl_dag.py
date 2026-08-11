@@ -4,19 +4,20 @@ Airflow DAG for Crypto ETL Pipeline.
 Pipeline:
 
 CoinGecko API
-     ↓
+    ↓
 Extract
-     ↓
+    ↓
 S3 RAW
-     ↓
+    ↓
 Transform with Spark
-     ↓
+    ↓
 S3 PROCESSED
-     ↓
+    ↓
 Amazon Redshift
 """
 
 from datetime import timedelta
+import logging
 
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
@@ -36,8 +37,8 @@ from dags.dag_config import (
 )
 
 from dags.dag_callbacks import (
-    task_success_callback,
-    task_failure_callback,
+    pipeline_success_callback,
+    pipeline_failure_callback,
 )
 
 from src.extract.extract_job import ExtractJob
@@ -45,10 +46,8 @@ from src.transform.transform_job import TransformJob
 from src.load.load_job import LoadJob
 
 from src.utils.spark_session import SparkSessionManager
-import logging
 
 logger = logging.getLogger(__name__)
-
 
 # Task 1: Extract
 def extract_data(**context):
@@ -117,7 +116,6 @@ def transform_data(**context):
     spark = None
 
     try:
-        # Create Spark session
         spark = SparkSessionManager.get_session()
 
         logger.info("Spark session created for Transform task.")
@@ -158,7 +156,9 @@ def transform_data(**context):
         return result["s3_processed_path"]
 
     finally:
+
         if spark is not None:
+
             SparkSessionManager.stop_session()
 
             logger.info("Spark session stopped after Transform task.")
@@ -166,7 +166,8 @@ def transform_data(**context):
 # Task 3: Load
 def load_data(**context):
     """
-    Load processed Parquet data from S3 into Amazon Redshift.
+    Load processed Parquet data from S3
+    into Amazon Redshift.
     """
 
     logger.info("Starting Load task.")
@@ -187,7 +188,7 @@ def load_data(**context):
     spark = None
 
     try:
-        # Create Spark session
+
         spark = SparkSessionManager.get_session()
 
         logger.info("Spark session created for Load task.")
@@ -232,7 +233,9 @@ def load_data(**context):
         return result["loaded_rows"]
 
     finally:
+
         if spark is not None:
+
             SparkSessionManager.stop_session()
 
             logger.info("Spark session stopped after Load task.")
@@ -248,6 +251,13 @@ with DAG(
     dagrun_timeout=DAG_RUN_TIMEOUT,
     max_active_runs=MAX_ACTIVE_RUNS,
     max_active_tasks=MAX_ACTIVE_TASKS,
+
+    # ONE SUCCESS notification for entire DAG
+    on_success_callback=pipeline_success_callback,
+
+    # ONE FAILURE notification for entire DAG
+    on_failure_callback=pipeline_failure_callback,
+
     tags=[
         "crypto",
         "etl",
@@ -263,8 +273,6 @@ with DAG(
         task_id="extract_data",
         python_callable=extract_data,
         execution_timeout=timedelta(minutes=15),
-        on_success_callback=task_success_callback,
-        on_failure_callback=task_failure_callback,
     )
 
     # Transform Task
@@ -272,8 +280,6 @@ with DAG(
         task_id="transform_data",
         python_callable=transform_data,
         execution_timeout=timedelta(minutes=40),
-        on_success_callback=task_success_callback,
-        on_failure_callback=task_failure_callback,
     )
 
     # Load Task
@@ -281,8 +287,6 @@ with DAG(
         task_id="load_data",
         python_callable=load_data,
         execution_timeout=timedelta(minutes=20),
-        on_success_callback=task_success_callback,
-        on_failure_callback=task_failure_callback,
     )
 
     # Task Dependency

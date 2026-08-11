@@ -17,7 +17,6 @@ class Config:
     SPARK_TIMEZONE = os.getenv("SPARK_TIMEZONE", "UTC")
 
     # Hadoop / S3
-    # Hadoop / S3
     HADOOP_AWS_PACKAGE = os.getenv(
         "HADOOP_AWS_PACKAGE",
         "org.apache.hadoop:hadoop-aws:3.3.4,"

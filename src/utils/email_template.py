@@ -9,7 +9,7 @@ class EmailTemplate:
 
         run_date = datetime.now(
             timezone.utc
-        ).strftime("%Y-%m-%d %H:%S:%S UTC")
+        ).strftime("%Y-%m-%d %H:%M:%S UTC")
 
         subject = (f"SUCCESS | {job_name}")
 
@@ -28,7 +28,7 @@ class EmailTemplate:
         
         run_date = datetime.now(
             timezone.utc
-        ).strftime("%Y-%m-%d %H:%S:%S UTC")
+        ).strftime("%Y-%m-%d %H:%M:%S UTC")
 
         subject = (f"FAILED | {job_name}")
 

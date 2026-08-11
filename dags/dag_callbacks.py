@@ -2,30 +2,32 @@
 Airflow DAG callbacks.
 
 Provides reusable SNS-based callbacks for
-successful and failed Airflow tasks.
+pipeline-level success and failure notifications.
 """
+
 from typing import Any
+
+from airflow.utils.state import TaskInstanceState
 
 from config.config import Config
 from src.notifications.sns_notifier import SNSNotifier
 from src.utils.email_template import EmailTemplate
 from src.utils.logger import Logger
 
+
 logger = Logger.get_logger("dag_callbacks", "dag_callbacks.log",)
 
-# Reuse SNS notifier instance
+# SNS Notifier
 sns_notifier = SNSNotifier()
 
+
+# SNS Helper
 def _send_sns(
     subject: str,
     message: str,
 ) -> None:
     """
     Publish a notification through Amazon SNS.
-
-    Args:
-        subject: SNS notification subject.
-        message: SNS notification message.
     """
 
     try:
@@ -39,27 +41,21 @@ def _send_sns(
     except Exception as e:
         logger.exception("Failed to publish SNS notification: %s", e,)
 
-def task_success_callback(
+
+# Pipeline Success Callback
+def pipeline_success_callback(
     context: dict[str, Any],
 ) -> None:
     """
-    Airflow callback executed when a task succeeds.
-
-    Args:
-        context: Airflow task context.
+    Send ONE SNS notification when the entire DAG succeeds.
     """
 
-    task = context["task"]
-    ti = context["ti"]
     dag = context["dag"]
 
     logger.info(
-        "Task succeeded | "
-        "DAG=%s | Task=%s | Run=%s | Try=%s",
+        "Pipeline succeeded | DAG=%s | Run=%s",
         dag.dag_id,
-        task.task_id,
         context.get("run_id"),
-        ti.try_number,
     )
 
     subject, message = EmailTemplate.sns_success(
@@ -71,44 +67,69 @@ def task_success_callback(
         message=message,
     )
 
-def task_failure_callback(
+# Pipeline Failure Callback
+def pipeline_failure_callback(
     context: dict[str, Any],
 ) -> None:
     """
-    Airflow callback executed when a task fails.
+    Send ONE SNS notification when the entire DAG fails.
 
-    Args:
-        context: Airflow task context.
+    Notification contains:
+
+    - Pipeline name
+    - Status
+    - Failed stage
+    - Actual error when available
+    - Run date
     """
 
-    task = context["task"]
-    ti = context["ti"]
     dag = context["dag"]
+    dag_run = context["dag_run"]
 
-    exception = context.get("exception")
-
-    error_message = (
-        str(exception)
-        if exception
-        else "Unknown error"
+    # Find failed task
+    failed_tasks = dag_run.get_task_instances(
+        state=TaskInstanceState.FAILED
     )
 
+    if failed_tasks:
+        failed_task = failed_tasks[0]
+        stage = failed_task.task_id
+
+    else:
+        stage = "unknown"
+
+        logger.error("DAG failed but no failed task was found.")
+
+    # Get error
+    exception = context.get("exception")
+
+    if exception is not None:
+        error_message = str(exception)
+
+    else:
+        error_message = (
+            f"Task '{stage}' failed. "
+            "Check Airflow task logs for the full error."
+        )
+
+    # Log failure
     logger.error(
-        "Task failed | "
-        "DAG=%s | Task=%s | Run=%s | Try=%s | Error=%s",
+        "Pipeline failed | "
+        "DAG=%s | Stage=%s | Run=%s | Error=%s",
         dag.dag_id,
-        task.task_id,
+        stage,
         context.get("run_id"),
-        ti.try_number,
         error_message,
     )
 
+    # Create notification
     subject, message = EmailTemplate.sns_failure(
         job_name=Config.PIPELINE_NAME,
-        stage=task.task_id,
+        stage=stage,
         error=error_message,
     )
 
+    # ONE SNS notification
     _send_sns(
         subject=subject,
         message=message,
