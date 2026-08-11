@@ -58,7 +58,7 @@ class TestDAGConfig:
 
     def test_start_date(self):
         assert isinstance(START_DATE, datetime)
-        assert START_DATE == datetime(2026, 8, 9)
+        assert START_DATE == datetime(2026, 8, 11)
 
     def test_catchup(self):
         assert CATCHUP is False

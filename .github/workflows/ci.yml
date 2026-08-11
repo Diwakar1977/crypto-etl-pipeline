@@ -1,5 +1,6 @@
 name: Crypto ETL CI
 
+# Trigger
 on:
   push:
     branches:
@@ -9,12 +10,18 @@ on:
     branches:
       - main
 
+# Permissions
+permissions:
+  contents: read
+
+# Jobs
 jobs:
+
+  # JOB 1: Unit Tests + Coverage
   test:
-    name: Run Tests
+    name: Run Unit Tests
     runs-on: ubuntu-24.04
 
-    # AWS region required by boto3 during unit-test collection
     env:
       AWS_REGION: ap-south-1
       AWS_DEFAULT_REGION: ap-south-1
@@ -110,3 +117,312 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+
+  # JOB 2: Airflow DAG Validation
+  dag-validation:
+    name: Validate Airflow DAGs
+    runs-on: ubuntu-24.04
+
+    env:
+      AIRFLOW_HOME: ${{ github.workspace }}/airflow
+      AWS_REGION: ap-south-1
+      AWS_DEFAULT_REGION: ap-south-1
+
+    steps:
+
+      # Checkout source code
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      # Setup Python 3.12
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # Verify Python
+      - name: Verify Python Version
+        run: |
+          python --version
+          python -m pip --version
+
+      # Upgrade pip
+      - name: Upgrade pip
+        run: |
+          python -m pip install --upgrade pip
+
+      # Install Project Dependencies
+      - name: Install Project Dependencies
+        run: |
+          python -m pip install -r requirements.txt
+
+      # Create Airflow Home
+      - name: Create Airflow Home
+        run: |
+          mkdir -p "$AIRFLOW_HOME"
+
+      # Verify Airflow
+      - name: Verify Airflow Version
+        run: |
+          airflow version
+
+      # Validate DAG Files
+      - name: Validate DAG Imports
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import importlib.util
+
+          dags_folder = "dags"
+          failed = False
+
+          print("========================================")
+          print("       AIRFLOW DAG VALIDATION")
+          print("========================================")
+
+          if not os.path.isdir(dags_folder):
+              print(f"ERROR: DAG folder not found: {dags_folder}")
+              sys.exit(1)
+
+          for filename in sorted(os.listdir(dags_folder)):
+
+              if not filename.endswith(".py"):
+                  continue
+
+              if filename == "__init__.py":
+                  continue
+
+              filepath = os.path.join(dags_folder, filename)
+
+              print(f"\nChecking DAG: {filepath}")
+
+              try:
+                  spec = importlib.util.spec_from_file_location(
+                      filename[:-3],
+                      filepath
+                  )
+
+                  module = importlib.util.module_from_spec(spec)
+                  spec.loader.exec_module(module)
+
+                  print(f"PASS: {filepath}")
+
+              except Exception as exc:
+                  print(f"FAIL: {filepath}")
+                  print(f"ERROR: {exc}")
+                  failed = True
+
+          if failed:
+              print("\nDAG validation FAILED.")
+              sys.exit(1)
+
+          print("\nAll DAG files imported successfully.")
+          print("DAG validation PASSED.")
+          PY
+
+      # Validate Airflow DAG List
+      - name: Validate Airflow DAG List
+        run: |
+          airflow dags list
+
+  # JOB 3: EMR / PySpark Validation
+  emr-spark-validation:
+    name: Validate EMR Spark Code
+    runs-on: ubuntu-24.04
+
+    env:
+      AWS_REGION: ap-south-1
+      AWS_DEFAULT_REGION: ap-south-1
+
+    steps:
+
+      # Checkout source code
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      # Setup Python 3.12
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # Setup Java 17
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      # Verify Python
+      - name: Verify Python Version
+        run: |
+          python --version
+          python -m pip --version
+
+      # Upgrade pip
+      - name: Upgrade pip
+        run: |
+          python -m pip install --upgrade pip
+
+      # Install Project Dependencies
+      - name: Install Project Dependencies
+        run: |
+          python -m pip install -r requirements.txt
+
+      # Verify Java
+      - name: Verify Java
+        run: |
+          java -version
+
+      # Verify PySpark
+      - name: Verify PySpark
+        run: |
+          python -c "import pyspark; print('PySpark:', pyspark.__version__)"
+
+      # Validate Spark Imports
+      - name: Validate Spark Imports
+        run: |
+          python - <<'PY'
+          import pyspark
+
+          from pyspark.sql import SparkSession
+          from pyspark.sql import DataFrame
+
+          print("PySpark import: PASS")
+          print("SparkSession import: PASS")
+          print("DataFrame import: PASS")
+          print("PySpark version:", pyspark.__version__)
+          PY
+
+      # Compile Python Source Code
+      - name: Compile Python Source Code
+        run: |
+          python -m compileall -q src
+          echo "Python source compilation PASSED."
+
+      # Validate Spark-related Modules
+      - name: Validate Spark Modules
+        run: |
+          python - <<'PY'
+          import os
+          import importlib
+
+          print("========================================")
+          print("       SPARK MODULE VALIDATION")
+          print("========================================")
+
+          modules = []
+
+          for root, dirs, files in os.walk("src"):
+
+              dirs[:] = [
+                  d for d in dirs
+                  if d != "__pycache__"
+              ]
+
+              for file in files:
+
+                  if not file.endswith(".py"):
+                      continue
+
+                  if file == "__init__.py":
+                      continue
+
+                  relative_path = os.path.join(root, file)
+
+                  module_name = relative_path[:-3].replace(
+                      os.sep,
+                      "."
+                  )
+
+                  modules.append(module_name)
+
+          failed = False
+
+          for module_name in sorted(modules):
+
+              print(f"\nImporting: {module_name}")
+
+              try:
+                  importlib.import_module(module_name)
+
+                  print(f"PASS: {module_name}")
+
+              except Exception as exc:
+                  print(f"FAIL: {module_name}")
+                  print(f"ERROR: {exc}")
+
+                  failed = True
+
+          if failed:
+              print("\nSpark/Python module validation FAILED.")
+              raise SystemExit(1)
+
+          print("\nAll source modules imported successfully.")
+          print("Spark module validation PASSED.")
+          PY
+
+      # Spark Smoke Test
+      - name: Run Spark Smoke Test
+        run: |
+          python - <<'PY'
+          from pyspark.sql import SparkSession
+
+          spark = (
+              SparkSession.builder
+              .master("local[2]")
+              .appName("CI-Spark-Smoke-Test")
+              .getOrCreate()
+          )
+
+          data = [
+              ("bitcoin", 100000.0),
+              ("ethereum", 4000.0),
+          ]
+
+          df = spark.createDataFrame(
+              data,
+              ["symbol", "price"]
+          )
+
+          count = df.count()
+
+          print("Spark rows:", count)
+
+          if count != 2:
+              raise RuntimeError("Spark smoke test failed.")
+
+          print("Spark smoke test PASSED.")
+
+          spark.stop()
+          PY
+
+  # JOB 4: Final CI Gate
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-24.04
+
+    needs:
+      - test
+      - dag-validation
+      - emr-spark-validation
+
+    steps:
+
+      - name: CI Passed
+        run: |
+          echo "=========================================="
+          echo "        CRYPTO ETL CI PASSED"
+          echo "=========================================="
+          echo ""
+          echo "Unit Tests          : PASSED"
+          echo "Coverage            : PASSED"
+          echo "Airflow DAG         : PASSED"
+          echo "PySpark Validation  : PASSED"
+          echo "Spark Smoke Test    : PASSED"
+          echo ""
+          echo "Ready for CD deployment."
+          echo "=========================================="

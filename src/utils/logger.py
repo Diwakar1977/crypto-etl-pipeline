@@ -36,14 +36,18 @@ class Logger:
             encoding="utf-8"
         )
 
+        file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 
         # Console handler
-        if sys.stderr is not None:
-            console_handler = logging.StreamHandler(sys.stderr)
-            console_handler.setFormatter(formatter)
-            logger.addHandler(console_handler)
+        # IMPORTANT:
+        # Use stdout instead of stderr.
+        # Airflow may classify stderr output as ERROR.
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
 
         return logger
 
@@ -54,3 +58,4 @@ class Logger:
         logger.info("=" * 60)
         logger.info(message)
         logger.info("=" * 60)
+
