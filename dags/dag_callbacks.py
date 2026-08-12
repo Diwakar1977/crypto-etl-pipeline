@@ -15,7 +15,6 @@ from src.utils.logger import Logger
 
 logger = Logger.get_logger("dag_callbacks", "dag_callbacks.log",)
 
-
 # SNS Notifier
 sns_notifier = SNSNotifier()
 
@@ -29,7 +28,6 @@ def _send_sns(
     """
 
     try:
-
         sns_notifier.publish(
             subject=subject,
             message=message,
@@ -58,9 +56,20 @@ def pipeline_notification(
         Notification
 
     Notification runs for both SUCCESS and FAILURE.
+
+    Airflow 3 compatible:
+    - No provide_session
+    - No SQLAlchemy ORM
+    - No direct metadata database access
     """
 
-    dag_run = context["dag_run"]
+    dag_run = context.get("dag_run")
+
+    if dag_run is None:
+        logger.error(
+            "dag_run was not available in Airflow context."
+        )
+        return
 
     logger.info(
         "Preparing final pipeline notification | "
@@ -69,23 +78,29 @@ def pipeline_notification(
         dag_run.run_id,
     )
 
-    # Get all task instances
-    task_instances = dag_run.get_task_instances()
+    # Get task instances from Airflow context
+    task_instances = context.get("task_instances")
 
-    task_states = {
-        ti.task_id: ti.state
-        for ti in task_instances
-    }
+    task_states = {}
 
-    extract_state = task_states.get("extract_task")
-    transform_state = task_states.get("transform_task")
-    load_state = task_states.get("load_task")
+    if task_instances:
+        task_states = {
+            ti.task_id: ti.state
+            for ti in task_instances
+        }
 
-    # Find failed ETL task
+    logger.info(
+        "Task states for run %s: %s",
+        dag_run.run_id,
+        task_states,
+    )
+
+    # Find failed ETL tasks
     failed_tasks = []
 
     for task_id, state in task_states.items():
 
+        # Do not consider notification task itself
         if task_id == "notification_task":
             continue
 
