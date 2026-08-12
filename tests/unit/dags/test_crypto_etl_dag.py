@@ -105,31 +105,14 @@ def test_extract_data(monkeypatch):
 
             pushed_values[key] = value
 
-    context = {
-        "ti": FakeTI()
-    }
+    context = {"ti": FakeTI()}
 
-    result = extract_data(
-        **context
-    )
+    result = extract_data(**context)
 
     assert result is not None
-
-    assert (
-        "raw_s3_path"
-        in pushed_values
-    )
-
-    assert (
-        pushed_values["extracted"]
-        == 100
-    )
-
-    assert (
-        pushed_values["extract_duration"]
-        == 5.2
-    )
-
+    assert ("raw_s3_path" in pushed_values)
+    assert (pushed_values["extracted"] == 100)
+    assert (pushed_values["extract_duration"] == 5.2)
 
 # Test 9: Transform task
 def test_transform_data(monkeypatch):
@@ -226,20 +209,9 @@ def test_transform_data(monkeypatch):
         "processed/crypto/"
     )
 
-    assert (
-        pushed_values["transformed"]
-        == 90
-    )
-
-    assert (
-        pushed_values["rejected"]
-        == 10
-    )
-
-    assert (
-        pushed_values["transform_duration"]
-        == 8.5
-    )
+    assert (pushed_values["transformed"] == 90)
+    assert (pushed_values["rejected"] == 10)
+    assert (pushed_values["transform_duration"] == 8.5)
 
 # Test 10: Transform missing XCom
 def test_transform_data_missing_raw_path():
@@ -254,18 +226,14 @@ def test_transform_data_missing_raw_path():
 
             return None
 
-    context = {
-        "ti": FakeTI()
-    }
+    context = {"ti": FakeTI()}
 
     with pytest.raises(
         ValueError,
         match="Raw S3 path was not found",
     ):
 
-        transform_data(
-            **context
-        )
+        transform_data(**context)
 
 # Test 11: Load task
 def test_load_data(monkeypatch):
@@ -358,15 +326,8 @@ def test_load_data(monkeypatch):
             key,
         ):
 
-            assert (
-                task_ids
-                == "transform_task"
-            )
-
-            assert (
-                key
-                == "s3_processed_path"
-            )
+            assert (task_ids == "transform_task")
+            assert (key == "s3_processed_path")
 
             return (
                 "s3://test-bucket/"
@@ -381,30 +342,14 @@ def test_load_data(monkeypatch):
 
             pushed_values[key] = value
 
-    context = {
-        "ti": FakeTI()
-    }
+    context = {"ti": FakeTI()}
 
-    result = load_data(
-        **context
-    )
-
+    result = load_data(**context)
     assert result == 90
 
-    assert (
-        pushed_values["loaded"]
-        == 90
-    )
-
-    assert (
-        pushed_values["load_duration"]
-        == 12.3
-    )
-
-    assert (
-        pushed_values["redshift_table"]
-        == "crypto_market_data"
-    )
+    assert (pushed_values["loaded"] == 90)
+    assert (pushed_values["load_duration"] == 12.3)
+    assert (pushed_values["redshift_table"] == "crypto_market_data")
 
 # Test 12: Load missing XCom
 def test_load_data_missing_processed_path():
