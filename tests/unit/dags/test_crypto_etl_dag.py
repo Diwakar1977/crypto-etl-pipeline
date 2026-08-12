@@ -1,18 +1,6 @@
-"""
-Unit tests for Crypto ETL Airflow DAG.
+import pytest
 
-Tests:
-- DAG configuration
-- Tasks
-- Dependencies
-- DAG-level success callback
-- DAG-level failure callback
-- Execution timeouts
-- No individual task notifications
-"""
-
-from datetime import timedelta
-
+# Import DAG
 from dags.crypto_etl_dag import (
     dag,
     extract_data,
@@ -20,182 +8,422 @@ from dags.crypto_etl_dag import (
     load_data,
 )
 
-from dags.dag_callbacks import (
-    pipeline_success_callback,
-    pipeline_failure_callback,
-)
+# Test 1: DAG exists
+def test_dag_exists():
 
-class TestCryptoETLDAG:
-    """Test Crypto ETL DAG configuration and structure."""
+    assert dag is not None
 
-    # DAG CONFIGURATION
-    def test_dag_id(self):
-        """Test DAG ID."""
+# Test 2: DAG ID
+def test_dag_id():
 
-        assert dag.dag_id == "crypto_etl_pipeline"
+    assert dag.dag_id == "crypto_etl_pipeline"
 
-    def test_dag_description(self):
-        """Test DAG description."""
 
-        description = dag.description.lower()
+# Test 3: Required tasks exist
+def test_required_tasks_exist():
 
-        assert "cryptocurrency" in description
-        assert "spark" in description
-        assert "redshift" in description
+    task_ids = {
+        task.task_id
+        for task in dag.tasks
+    }
 
-    def test_dag_schedule(self):
-        """Test DAG has a schedule."""
+    assert "extract_task" in task_ids
+    assert "transform_task" in task_ids
+    assert "load_task" in task_ids
+    assert "notification_task" in task_ids
 
-        assert dag.schedule is not None
+# Test 4: Exact number of tasks
+def test_task_count():
 
-    # DAG TASKS
-    def test_dag_tasks(self):
-        """Test all expected tasks exist."""
+    assert len(dag.tasks) == 4
 
-        task_ids = {
-            task.task_id
-            for task in dag.tasks
-        }
+# Test 5: Task dependency
+def test_task_dependencies():
 
-        expected_tasks = {
-            "extract_data",
-            "transform_data",
-            "load_data",
-        }
+    extract_task = dag.get_task("extract_task")
+    transform_task = dag.get_task("transform_task")
+    load_task = dag.get_task("load_task")
+    notification_task = dag.get_task("notification_task")
 
-        assert task_ids == expected_tasks
+    assert transform_task in (extract_task.downstream_list)
+    assert load_task in (transform_task.downstream_list)
+    assert notification_task in (load_task.downstream_list)
 
-    def test_task_count(self):
-        """Test DAG contains exactly three tasks."""
+# Test 6: Exact dependency chain
+def test_exact_pipeline_order():
 
-        assert len(dag.tasks) == 3
+    extract_task = dag.get_task("extract_task")
+    transform_task = dag.get_task("transform_task")
+    load_task = dag.get_task("load_task")
+    notification_task = dag.get_task("notification_task")
 
-    # EXTRACT TASK
-    def test_extract_task(self):
-        """Test Extract task configuration."""
+    assert extract_task.upstream_list == []
+    assert extract_task.downstream_list == [transform_task]
+    assert transform_task.upstream_list == [extract_task]
+    assert transform_task.downstream_list == [load_task]
+    assert load_task.upstream_list == [transform_task]
+    assert load_task.downstream_list == [notification_task]
+    assert notification_task.upstream_list == [load_task]
+    assert notification_task.downstream_list == []
 
-        task = dag.get_task("extract_data")
+# Test 7: Notification trigger rule
+def test_notification_trigger_rule():
 
-        assert task.python_callable == extract_data
-        assert task.execution_timeout == timedelta(minutes=15)
+    notification_task = dag.get_task("notification_task")
 
-    # TRANSFORM TASK
-    def test_transform_task(self):
-        """Test Transform task configuration."""
+    assert (notification_task.trigger_rule == "all_done")
 
-        task = dag.get_task("transform_data")
+# Test 8: Extract task
+def test_extract_data(monkeypatch):
 
-        assert task.python_callable == transform_data
-        assert task.execution_timeout == timedelta(minutes=40)
+    class FakeExtractJob:
 
-    # LOAD TASK
-    def test_load_task(self):
-        """Test Load task configuration."""
+        def run(self):
 
-        task = dag.get_task("load_data")
+            return {
+                "s3_key": (
+                    "raw_data/"
+                    "year=2026/"
+                    "month=08/"
+                    "day=12/"
+                    "crypto.json"
+                ),
+                "record_count": 100,
+                "execution_time": 5.2,
+            }
 
-        assert task.python_callable == load_data
-        assert task.execution_timeout == timedelta(minutes=20)
+    monkeypatch.setattr(
+        "dags.crypto_etl_dag.ExtractJob",
+        FakeExtractJob,
+    )
 
-    # DAG SUCCESS CALLBACK
+    pushed_values = {}
 
-    def test_dag_success_callback(self):
-        """
-        Entire DAG should have ONE success callback.
-        """
+    class FakeTI:
 
-        assert dag.on_success_callback is not None
-        assert (dag.on_success_callback == pipeline_success_callback)
+        def xcom_push(self, key, value):
 
-    # DAG FAILURE CALLBACK
-    def test_dag_failure_callback(self):
-        """
-        Entire DAG should have ONE failure callback.
-        """
+            pushed_values[key] = value
 
-        assert dag.on_failure_callback is not None
+    context = {
+        "ti": FakeTI()
+    }
 
-        assert (dag.on_failure_callback == pipeline_failure_callback)
+    result = extract_data(
+        **context
+    )
 
-    # NO INDIVIDUAL TASK CALLBACKS
-    def test_extract_has_no_individual_callbacks(self):
-        """
-        Extract should NOT send its own notification.
-        """
+    assert result is not None
 
-        task = dag.get_task("extract_data")
+    assert (
+        "raw_s3_path"
+        in pushed_values
+    )
 
-        assert not task.on_success_callback
-        assert not task.on_failure_callback
+    assert (
+        pushed_values["extracted"]
+        == 100
+    )
 
-    def test_transform_has_no_individual_callbacks(self):
-        """
-        Transform should NOT send its own notification.
-        """
+    assert (
+        pushed_values["extract_duration"]
+        == 5.2
+    )
 
-        task = dag.get_task("transform_data")
 
-        assert not task.on_success_callback
-        assert not task.on_failure_callback
+# Test 9: Transform task
+def test_transform_data(monkeypatch):
 
-    def test_load_has_no_individual_callbacks(self):
-        """
-        Load should NOT send its own notification.
-        """
+    class FakeSpark:
 
-        task = dag.get_task("load_data")
+        pass
 
-        assert not task.on_success_callback
-        assert not task.on_failure_callback
+    class FakeSparkSessionManager:
 
-    # DEPENDENCIES
-    def test_task_dependencies(self):
-        """
-        Test:
+        @staticmethod
+        def get_session():
 
-        Extract
-            ↓
-        Transform
-            ↓
-        Load
-        """
+            return FakeSpark()
 
-        extract_task = dag.get_task("extract_data")
-        transform_task = dag.get_task("transform_data")
-        load_task = dag.get_task("load_data")
+        @staticmethod
+        def stop_session():
 
-        assert (extract_task.downstream_task_ids == {"transform_data"})
-        assert (transform_task.upstream_task_ids == {"extract_data"})
-        assert (transform_task.downstream_task_ids == {"load_data"})
-        assert (load_task.upstream_task_ids == {"transform_data"})
+            pass
 
-    # TASK ORDER
-    def test_task_order(self):
-        """Test complete task execution order."""
+    class FakeTransformJob:
 
-        task_ids = [
-            task.task_id
-            for task in dag.topological_sort()
-        ]
+        def __init__(
+            self,
+            spark,
+            schema_file,
+            input_path,
+            output_path,
+        ):
 
-        assert task_ids == [
-            "extract_data",
-            "transform_data",
-            "load_data",
-        ]
+            self.spark = spark
+            self.schema_file = schema_file
+            self.input_path = input_path
+            self.output_path = output_path
 
-    # FIRST TASK
-    def test_extract_has_no_upstream(self):
-        """Extract should be the first task."""
+        def run(self):
 
-        task = dag.get_task("extract_data")
+            return {
+                "s3_processed_path": (
+                    "s3://test-bucket/"
+                    "processed/crypto/"
+                ),
+                "processed_rows": 90,
+                "rejected_rows": 10,
+                "execution_time": 8.5,
+            }
 
-        assert task.upstream_task_ids == set()
+    monkeypatch.setattr(
+        "dags.crypto_etl_dag.SparkSessionManager",
+        FakeSparkSessionManager,
+    )
 
-    # FINAL TASK
-    def test_load_has_no_downstream(self):
-        """Load should be the final task."""
+    monkeypatch.setattr(
+        "dags.crypto_etl_dag.TransformJob",
+        FakeTransformJob,
+    )
 
-        task = dag.get_task("load_data")
+    pushed_values = {}
 
-        assert task.downstream_task_ids == set()
+    class FakeTI:
+
+        def xcom_pull(
+            self,
+            task_ids,
+            key,
+        ):
+
+            assert task_ids == "extract_task"
+            assert key == "raw_s3_path"
+
+            return (
+                "s3://test-bucket/"
+                "raw/crypto.json"
+            )
+
+        def xcom_push(
+            self,
+            key,
+            value,
+        ):
+
+            pushed_values[key] = value
+
+    context = {
+        "ti": FakeTI()
+    }
+
+    result = transform_data(
+        **context
+    )
+
+    assert result == (
+        "s3://test-bucket/"
+        "processed/crypto/"
+    )
+
+    assert (
+        pushed_values["transformed"]
+        == 90
+    )
+
+    assert (
+        pushed_values["rejected"]
+        == 10
+    )
+
+    assert (
+        pushed_values["transform_duration"]
+        == 8.5
+    )
+
+# Test 10: Transform missing XCom
+def test_transform_data_missing_raw_path():
+
+    class FakeTI:
+
+        def xcom_pull(
+            self,
+            task_ids,
+            key,
+        ):
+
+            return None
+
+    context = {
+        "ti": FakeTI()
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="Raw S3 path was not found",
+    ):
+
+        transform_data(
+            **context
+        )
+
+# Test 11: Load task
+def test_load_data(monkeypatch):
+
+    class FakeSchema:
+        pass
+
+    class FakeDataFrame:
+
+        @property
+        def schema(self):
+
+            return FakeSchema()
+
+    class FakeSpark:
+
+        def read_parquet(
+            self,
+            path,
+        ):
+
+            return FakeDataFrame()
+
+    class FakeRead:
+
+        def parquet(
+            self,
+            path,
+        ):
+
+            return FakeDataFrame()
+
+    class FakeSpark:
+
+        read = FakeRead()
+
+    class FakeSparkSessionManager:
+
+        @staticmethod
+        def get_session():
+
+            return FakeSpark()
+
+        @staticmethod
+        def stop_session():
+
+            pass
+
+    class FakeLoadJob:
+
+        def __init__(
+            self,
+            s3_processed_path,
+            schema,
+        ):
+
+            self.s3_processed_path = (
+                s3_processed_path
+            )
+
+            self.schema = schema
+
+        def run(self):
+
+            return {
+                "loaded_rows": 90,
+                "execution_time": 12.3,
+                "redshift_table": (
+                    "crypto_market_data"
+                ),
+            }
+
+    monkeypatch.setattr(
+        "dags.crypto_etl_dag.SparkSessionManager",
+        FakeSparkSessionManager,
+    )
+
+    monkeypatch.setattr(
+        "dags.crypto_etl_dag.LoadJob",
+        FakeLoadJob,
+    )
+
+    pushed_values = {}
+
+    class FakeTI:
+
+        def xcom_pull(
+            self,
+            task_ids,
+            key,
+        ):
+
+            assert (
+                task_ids
+                == "transform_task"
+            )
+
+            assert (
+                key
+                == "s3_processed_path"
+            )
+
+            return (
+                "s3://test-bucket/"
+                "processed/crypto/"
+            )
+
+        def xcom_push(
+            self,
+            key,
+            value,
+        ):
+
+            pushed_values[key] = value
+
+    context = {
+        "ti": FakeTI()
+    }
+
+    result = load_data(
+        **context
+    )
+
+    assert result == 90
+
+    assert (
+        pushed_values["loaded"]
+        == 90
+    )
+
+    assert (
+        pushed_values["load_duration"]
+        == 12.3
+    )
+
+    assert (
+        pushed_values["redshift_table"]
+        == "crypto_market_data"
+    )
+
+# Test 12: Load missing XCom
+def test_load_data_missing_processed_path():
+
+    class FakeTI:
+
+        def xcom_pull(
+            self,
+            task_ids,
+            key,
+        ):
+
+            return None
+
+    context = {"ti": FakeTI()}
+
+    with pytest.raises(
+        ValueError,
+        match="Processed S3 path was not found",
+    ):
+
+        load_data(**context)

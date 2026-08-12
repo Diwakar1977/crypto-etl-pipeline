@@ -27,7 +27,7 @@ TAGS = [
 # Every day at 09:00 UTC
 SCHEDULE = "0 9 * * *"
 
-START_DATE = datetime(2026, 8, 11)
+START_DATE = datetime(2026, 8, 15)
 
 CATCHUP = False
 

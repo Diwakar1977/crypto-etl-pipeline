@@ -1,263 +1,226 @@
-"""
-Unit tests for Airflow DAG callbacks.
-"""
+import pytest
+from dags import dag_callbacks
 
-from unittest.mock import MagicMock, patch
+# Fake Task Instance
+class FakeTaskInstance:
+    def __init__(self, task_id, state):
+        self.task_id = task_id
+        self.state = state
 
-from dags.dag_callbacks import (
-    _send_sns,
-    pipeline_success_callback,
-    pipeline_failure_callback,
-)
+# Fake DAG Run
+class FakeDagRun:
 
-# Test SNS Helper
-class TestSendSNS:
-    """Test SNS notification helper."""
+    def __init__(self, task_instances):
+        self.dag_id = "crypto_etl_pipeline"
+        self.run_id = "test_run_001"
+        self._task_instances = task_instances
 
-    @patch("dags.dag_callbacks.sns_notifier")
-    def test_send_sns_success(self, mock_sns):
-        """SNS message should be published successfully."""
+    def get_task_instances(self):
+        return self._task_instances
 
-        mock_sns.publish.return_value = "message-id-123"
+# Test 1: Complete Pipeline SUCCESS
+def test_pipeline_notification_success(monkeypatch):
 
-        _send_sns(
-            subject="Test Subject",
-            message="Test Message",
+    task_instances = [
+        FakeTaskInstance(
+            "extract_task",
+            "success",
+        ),
+        FakeTaskInstance(
+            "transform_task",
+            "success",
+        ),
+        FakeTaskInstance(
+            "load_task",
+            "success",
+        ),
+        FakeTaskInstance(
+            "notification_task",
+            "running",
+        ),
+    ]
+
+    dag_run = FakeDagRun(task_instances)
+
+    sent_notification = {}
+
+    def mock_sns_success(job_name):
+
+        return (
+            "Crypto ETL Pipeline - SUCCESS",
+            "Crypto ETL Pipeline completed successfully.",
         )
 
-        mock_sns.publish.assert_called_once_with(
-            subject="Test Subject",
-            message="Test Message",
-        )
+    def mock_send_sns(subject, message):
 
-    @patch("dags.dag_callbacks.sns_notifier")
-    def test_send_sns_failure(self, mock_sns):
-        """SNS failure should not raise an exception."""
+        sent_notification["subject"] = subject
+        sent_notification["message"] = message
 
-        mock_sns.publish.side_effect = Exception(
-            "SNS publish failed"
-        )
+    monkeypatch.setattr(
+        dag_callbacks.EmailTemplate,
+        "sns_success",
+        mock_sns_success,
+    )
 
-        _send_sns(
-            subject="Test Subject",
-            message="Test Message",
-        )
-
-        mock_sns.publish.assert_called_once_with(
-            subject="Test Subject",
-            message="Test Message",
-        )
-
-
-# Pipeline Success
-class TestPipelineSuccessCallback:
-    """Test pipeline-level success callback."""
-
-    @patch("dags.dag_callbacks._send_sns")
-    @patch("dags.dag_callbacks.EmailTemplate.sns_success")
-    def test_pipeline_success_callback(
-        self,
-        mock_template,
+    monkeypatch.setattr(
+        dag_callbacks,
+        "_send_sns",
         mock_send_sns,
+    )
+
+    context = {"dag_run": dag_run,}
+
+    dag_callbacks.pipeline_notification(**context)
+
+    assert (sent_notification["subject"] == "Crypto ETL Pipeline - SUCCESS")
+    assert ("completed successfully" in sent_notification["message"])
+
+# Test 2: Transform FAILURE
+def test_pipeline_notification_transform_failure(
+    monkeypatch,
+):
+
+    task_instances = [
+        FakeTaskInstance(
+            "extract_task",
+            "success",
+        ),
+        FakeTaskInstance(
+            "transform_task",
+            "failed",
+        ),
+        FakeTaskInstance(
+            "load_task",
+            "upstream_failed",
+        ),
+        FakeTaskInstance(
+            "notification_task",
+            "running",
+        ),
+    ]
+
+    dag_run = FakeDagRun(task_instances)
+
+    sent_notification = {}
+
+    def mock_sns_failure(
+        job_name,
+        stage,
+        error,
     ):
-        """Entire DAG success sends ONE notification."""
 
-        mock_template.return_value = (
-            "SUCCESS | Crypto ETL Pipeline",
-            "Pipeline completed successfully.",
+        return (
+            "Crypto ETL Pipeline - FAILED",
+            f"Pipeline failed at {stage}: {error}",
         )
 
-        dag = MagicMock()
-        dag.dag_id = "crypto_etl_pipeline"
+    def mock_send_sns(subject, message):
 
-        context = {
-            "dag": dag,
-            "run_id": "test_run_001",
-        }
+        sent_notification["subject"] = subject
+        sent_notification["message"] = message
 
-        pipeline_success_callback(context)
+    monkeypatch.setattr(
+        dag_callbacks.EmailTemplate,
+        "sns_failure",
+        mock_sns_failure,
+    )
 
-        mock_template.assert_called_once_with(
-            job_name="Crypto ETL Pipeline",
-        )
-
-        mock_send_sns.assert_called_once_with(
-            subject="SUCCESS | Crypto ETL Pipeline",
-            message="Pipeline completed successfully.",
-        )
-
-
-# Pipeline Failure
-class TestPipelineFailureCallback:
-    """Test pipeline-level failure callback."""
-
-    @patch("dags.dag_callbacks._send_sns")
-    @patch("dags.dag_callbacks.EmailTemplate.sns_failure")
-    def test_pipeline_failure_callback_with_exception(
-        self,
-        mock_template,
+    monkeypatch.setattr(
+        dag_callbacks,
+        "_send_sns",
         mock_send_sns,
+    )
+
+    context = {"dag_run": dag_run,}
+
+    dag_callbacks.pipeline_notification(
+        **context
+    )
+
+    assert (sent_notification["subject"] == "Crypto ETL Pipeline - FAILED")
+    assert ("transform_task" in sent_notification["message"])
+
+# Test 3: Load FAILURE
+def test_pipeline_notification_load_failure(
+    monkeypatch,
+):
+
+    task_instances = [
+        FakeTaskInstance(
+            "extract_task",
+            "success",
+        ),
+        FakeTaskInstance(
+            "transform_task",
+            "success",
+        ),
+        FakeTaskInstance(
+            "load_task",
+            "failed",
+        ),
+        FakeTaskInstance(
+            "notification_task",
+            "running",
+        ),
+    ]
+
+    dag_run = FakeDagRun(task_instances)
+
+    sent_notification = {}
+
+    def mock_sns_failure(
+        job_name,
+        stage,
+        error,
     ):
-        """
-        Failed DAG should identify the failed task
-        and include the actual exception.
-        """
 
-        mock_template.return_value = (
-            "FAILED | Crypto ETL Pipeline",
-            "Pipeline failed.",
+        return (
+            "Crypto ETL Pipeline - FAILED",
+            f"Pipeline failed at {stage}: {error}",
         )
 
-        # Failed task
-        failed_task = MagicMock()
-        failed_task.task_id = "transform_data"
+    def mock_send_sns(subject, message):
 
-        # DAG Run
-        dag_run = MagicMock()
+        sent_notification["subject"] = subject
+        sent_notification["message"] = message
 
-        dag_run.get_task_instances.return_value = [
-            failed_task
-        ]
+    monkeypatch.setattr(
+        dag_callbacks.EmailTemplate,
+        "sns_failure",
+        mock_sns_failure,
+    )
 
-        # DAG
-        dag = MagicMock()
-        dag.dag_id = "crypto_etl_pipeline"
-
-        # Actual exception
-        exception = ValueError(
-            "Test transformation error"
-        )
-
-        context = {
-            "dag": dag,
-            "dag_run": dag_run,
-            "run_id": "test_run_002",
-            "exception": exception,
-        }
-
-        pipeline_failure_callback(context)
-
-        # Verify stage + error
-        mock_template.assert_called_once_with(
-            job_name="Crypto ETL Pipeline",
-            stage="transform_data",
-            error="Test transformation error",
-        )
-
-        # ONE SNS notification
-        mock_send_sns.assert_called_once_with(
-            subject="FAILED | Crypto ETL Pipeline",
-            message="Pipeline failed.",
-        )
-
-
-    @patch("dags.dag_callbacks._send_sns")
-    @patch("dags.dag_callbacks.EmailTemplate.sns_failure")
-    def test_pipeline_failure_callback_without_exception(
-        self,
-        mock_template,
+    monkeypatch.setattr(
+        dag_callbacks,
+        "_send_sns",
         mock_send_sns,
+    )
+
+    context = {"dag_run": dag_run,}
+
+    dag_callbacks.pipeline_notification(**context)
+
+    assert (sent_notification["subject"] == "Crypto ETL Pipeline - FAILED")
+    assert ("load_task" in sent_notification["message"])
+
+# Test 4: SNS Failure Should Not Crash Callback
+def test_send_sns_failure(monkeypatch):
+
+    def mock_publish(
+        subject,
+        message,
     ):
-        """
-        Failed task should still identify the stage
-        when exception is unavailable.
-        """
 
-        mock_template.return_value = (
-            "FAILED | Crypto ETL Pipeline",
-            "Pipeline failed.",
-        )
+        raise Exception("SNS connection failed")
+    
+    monkeypatch.setattr(
+        dag_callbacks.sns_notifier,
+        "publish",
+        mock_publish,
+    )
 
-        # Failed task
-        failed_task = MagicMock()
-        failed_task.task_id = "load_data"
-
-        # DAG Run
-        dag_run = MagicMock()
-
-        dag_run.get_task_instances.return_value = [
-            failed_task
-        ]
-
-        # DAG
-        dag = MagicMock()
-        dag.dag_id = "crypto_etl_pipeline"
-
-        context = {
-            "dag": dag,
-            "dag_run": dag_run,
-            "run_id": "test_run_003",
-            "exception": None,
-        }
-
-        pipeline_failure_callback(context)
-
-        expected_error = (
-            "Task 'load_data' failed. "
-            "Check Airflow task logs for the full error."
-        )
-
-        mock_template.assert_called_once_with(
-            job_name="Crypto ETL Pipeline",
-            stage="load_data",
-            error=expected_error,
-        )
-
-        mock_send_sns.assert_called_once_with(
-            subject="FAILED | Crypto ETL Pipeline",
-            message="Pipeline failed.",
-        )
-
-
-    @patch("dags.dag_callbacks._send_sns")
-    @patch("dags.dag_callbacks.EmailTemplate.sns_failure")
-    def test_pipeline_failure_callback_no_failed_task(
-        self,
-        mock_template,
-        mock_send_sns,
-    ):
-        """
-        Handle DAG failure when no failed task
-        is available.
-        """
-
-        mock_template.return_value = (
-            "FAILED | Crypto ETL Pipeline",
-            "Pipeline failed.",
-        )
-
-        # DAG Run with NO failed tasks
-        dag_run = MagicMock()
-
-        dag_run.get_task_instances.return_value = []
-
-        # DAG
-        dag = MagicMock()
-        dag.dag_id = "crypto_etl_pipeline"
-
-        # Exception
-        exception = RuntimeError(
-            "Unknown pipeline error"
-        )
-
-        context = {
-            "dag": dag,
-            "dag_run": dag_run,
-            "run_id": "test_run_004",
-            "exception": exception,
-        }
-
-        pipeline_failure_callback(context)
-
-        # Stage should be unknown
-        mock_template.assert_called_once_with(
-            job_name="Crypto ETL Pipeline",
-            stage="unknown",
-            error="Unknown pipeline error",
-        )
-
-        # ONE SNS notification
-        mock_send_sns.assert_called_once_with(
-            subject="FAILED | Crypto ETL Pipeline",
-            message="Pipeline failed.",
-        )
+    # Should not raise exception
+    dag_callbacks._send_sns(
+        subject="Test Subject",
+        message="Test Message",
+    )

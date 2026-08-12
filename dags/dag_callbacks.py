@@ -1,13 +1,11 @@
 """
-Airflow DAG callbacks.
+Airflow DAG notification callbacks.
 
-Provides reusable SNS-based callbacks for
-pipeline-level success and failure notifications.
+Provides final SNS notification for the
+Crypto ETL pipeline.
 """
 
 from typing import Any
-
-from airflow.utils.state import TaskInstanceState
 
 from config.config import Config
 from src.notifications.sns_notifier import SNSNotifier
@@ -17,9 +15,9 @@ from src.utils.logger import Logger
 
 logger = Logger.get_logger("dag_callbacks", "dag_callbacks.log",)
 
+
 # SNS Notifier
 sns_notifier = SNSNotifier()
-
 
 # SNS Helper
 def _send_sns(
@@ -31,6 +29,7 @@ def _send_sns(
     """
 
     try:
+
         sns_notifier.publish(
             subject=subject,
             message=message,
@@ -41,95 +40,99 @@ def _send_sns(
     except Exception as e:
         logger.exception("Failed to publish SNS notification: %s", e,)
 
-
-# Pipeline Success Callback
-def pipeline_success_callback(
-    context: dict[str, Any],
+# Final Pipeline Notification
+def pipeline_notification(
+    **context: Any,
 ) -> None:
     """
-    Send ONE SNS notification when the entire DAG succeeds.
+    Send ONE SNS notification after the ETL pipeline.
+
+    Pipeline:
+
+        Extract
+            ↓
+        Transform
+            ↓
+        Load
+            ↓
+        Notification
+
+    Notification runs for both SUCCESS and FAILURE.
     """
 
-    dag = context["dag"]
-
-    logger.info(
-        "Pipeline succeeded | DAG=%s | Run=%s",
-        dag.dag_id,
-        context.get("run_id"),
-    )
-
-    subject, message = EmailTemplate.sns_success(
-        job_name=Config.PIPELINE_NAME,
-    )
-
-    _send_sns(
-        subject=subject,
-        message=message,
-    )
-
-# Pipeline Failure Callback
-def pipeline_failure_callback(
-    context: dict[str, Any],
-) -> None:
-    """
-    Send ONE SNS notification when the entire DAG fails.
-
-    Notification contains:
-
-    - Pipeline name
-    - Status
-    - Failed stage
-    - Actual error when available
-    - Run date
-    """
-
-    dag = context["dag"]
     dag_run = context["dag_run"]
 
-    # Find failed task
-    failed_tasks = dag_run.get_task_instances(
-        state=TaskInstanceState.FAILED
+    logger.info(
+        "Preparing final pipeline notification | "
+        "DAG=%s | Run=%s",
+        dag_run.dag_id,
+        dag_run.run_id,
     )
 
-    if failed_tasks:
-        failed_task = failed_tasks[0]
-        stage = failed_task.task_id
+    # Get all task instances
+    task_instances = dag_run.get_task_instances()
 
-    else:
-        stage = "unknown"
+    task_states = {
+        ti.task_id: ti.state
+        for ti in task_instances
+    }
 
-        logger.error("DAG failed but no failed task was found.")
+    extract_state = task_states.get("extract_task")
+    transform_state = task_states.get("transform_task")
+    load_state = task_states.get("load_task")
 
-    # Get error
-    exception = context.get("exception")
+    # Find failed ETL task
+    failed_tasks = []
 
-    if exception is not None:
-        error_message = str(exception)
+    for task_id, state in task_states.items():
 
-    else:
-        error_message = (
-            f"Task '{stage}' failed. "
-            "Check Airflow task logs for the full error."
+        if task_id == "notification_task":
+            continue
+
+        if state == "failed":
+            failed_tasks.append(task_id)
+
+    # SUCCESS
+    if not failed_tasks:
+
+        logger.info("Crypto ETL pipeline completed successfully.")
+
+        subject, message = EmailTemplate.sns_success(
+            job_name=Config.PIPELINE_NAME,
         )
 
-    # Log failure
+        _send_sns(
+            subject=subject,
+            message=message,
+        )
+
+        return
+
+    # FAILURE
+    failed_stage = failed_tasks[0]
+
+    error_message = (
+        f"Task '{failed_stage}' failed. "
+        "Check Airflow task logs for the full error."
+    )
+
     logger.error(
-        "Pipeline failed | "
+        "Crypto ETL pipeline failed | "
         "DAG=%s | Stage=%s | Run=%s | Error=%s",
-        dag.dag_id,
-        stage,
-        context.get("run_id"),
+        dag_run.dag_id,
+        failed_stage,
+        dag_run.run_id,
         error_message,
     )
 
-    # Create notification
+    # Create failure notification
     subject, message = EmailTemplate.sns_failure(
         job_name=Config.PIPELINE_NAME,
-        stage=stage,
+        stage=failed_stage,
         error=error_message,
     )
 
-    # ONE SNS notification
+    # Send ONE SNS notification
     _send_sns(
         subject=subject,
         message=message,
