@@ -1,4 +1,4 @@
-name: AWS Connection and S3 Test
+name: OIDC Connection
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: arn:aws:iam::038218373505:role/CryptoETL-GitActions-Role
+          role-to-assume: arn:aws:iam::038218373505:role/CryptoETL-GitHubActions-Role
           role-session-name: github-actions-test
           aws-region: ap-south-1
 
