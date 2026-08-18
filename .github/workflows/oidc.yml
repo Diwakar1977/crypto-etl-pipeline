@@ -1,9 +1,6 @@
 name: AWS Connection Test
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -15,8 +12,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Debug OIDC claims
+        uses: github/actions-oidc-debugger@main
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
