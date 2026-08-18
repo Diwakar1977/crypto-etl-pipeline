@@ -12,13 +12,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Debug OIDC claims
-        uses: github/actions-oidc-debugger@main
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::038218373505:role/CryptoETL-GitActions-Role
+          role-session-name: github-actions-test
           aws-region: ap-south-1
 
       - name: Test AWS connection
