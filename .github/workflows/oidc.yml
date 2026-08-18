@@ -1,4 +1,4 @@
-name: AWS Connection Test
+name: AWS Connection and S3 Test
 
 on:
   workflow_dispatch:
@@ -24,4 +24,13 @@ jobs:
 
       - name: Test AWS connection
         run: |
+          echo "Testing AWS connection..."
           aws sts get-caller-identity
+
+      - name: Test S3 bucket access
+        run: |
+          echo "Testing S3 bucket access..."
+          aws s3api head-bucket \
+            --bucket crypto-etl-prod-diwakar-2026
+
+          echo "S3 bucket access successful!"
