@@ -1,6 +1,9 @@
-name: AWS OIDC Connection Test
+name: AWS Connection Test
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -8,16 +11,20 @@ permissions:
   contents: read
 
 jobs:
-  test-aws-connection:
+  aws-connection-test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Configure AWS Credentials
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::038218373505:role/CryptoETL-GitHubActions-Role
+          role-session-name: github-actions-test
           aws-region: ap-south-1
 
-      - name: Test AWS Connection
+      - name: Test AWS connection
         run: |
           aws sts get-caller-identity
